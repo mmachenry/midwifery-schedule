@@ -1,7 +1,9 @@
+module Schedule (main) where
+
 import Data.Time.Calendar
 import Data.List (intersect)
 import Control.Monad (guard, forM_)
-import Data.SBV
+import Data.SBV hiding (listArray)
 import Data.Array
 import Data.Maybe (fromJust)
 
@@ -11,16 +13,19 @@ data Cohort = Cohort Year MonthOfYear deriving (Eq, Show)
 
 oneYearOfCohorts = [Cohort 2026 09, Cohort 2026 10, Cohort 2026 11, Cohort 2026 12, Cohort 2027 01, Cohort 2027 02, Cohort 2027 03, Cohort 2027 04, Cohort 2027 05, Cohort 2027 06, Cohort 2027 07, Cohort 2027 08]
 
-othermain = do
+-- {-
+main = do
   result <- schedule oneYearOfCohorts
   print result
+-- -}
 
+{-
 main = do
   let cohorts = oneYearOfCohorts
-  res <- schedule cohorts
+  res <- optimize (schedule cohorts)
   case res of
-    SatResult (Satisfiable _ _) -> do
-      forM_ cohorts $ \cohort-> do
+    OptimizeResult (Satisfiable _ _) -> do
+      forM_ cohorts $ \cohort -> do
         let names = map (varName cohort) [minBound .. maxBound :: Visit]
         days <- mapM
           (\n -> pure (ModifiedJulianDay (fromJust (getModelValue n res))))
@@ -28,10 +33,19 @@ main = do
         forM_ (zip names days) print
     _ ->
       putStrLn "No solution"
+-}
 
-schedule cohorts = sat $ do
+
+schedule cohorts = optimize $ do
   allDays <- mapM buildCohortEvents cohorts
   constrain $ distinct (concat allDays)
+
+  forM_ (zip cohorts allDays) $ \(cohort, cohortsDays)->
+    forM_ (zip [minBound .. maxBound] cohortsDays) $ \(visit, day)-> do
+      minimize
+        (show cohort ++ "-" ++ show visit)
+        (visitDeviation cohort visit day)
+
 
 buildCohortEvents :: Cohort -> Symbolic [SInteger]
 buildCohortEvents cohort = do
@@ -78,6 +92,11 @@ visitInRange :: Cohort -> Visit -> SInteger -> SInteger -> SBool
 visitInRange cohort visit day plusMinusWeeks =
   let optimal = literal (toModifiedJulianDay (targetDay cohort visit))
   in abs (optimal - day) .<= 7 * plusMinusWeeks
+
+visitDeviation :: Cohort -> Visit -> SInteger -> SInteger
+visitDeviation cohort visit day =
+  let optimal = literal (toModifiedJulianDay (targetDay cohort visit))
+  in abs (optimal - day)
 
 isAvailableWeekDay :: SInteger -> SBool
 isAvailableWeekDay d =
