@@ -8,20 +8,15 @@ import Data.Maybe (fromJust)
 data Visit = W16 | W24 | W28 | W30 | W32 | W34 | W37 | W38 | W39 | W46
   deriving (Show, Eq, Ord, Bounded, Enum, Ix)
 data Cohort = Cohort Year MonthOfYear deriving (Eq, Show)
-data Event = Event Cohort Visit Day deriving (Eq, Show)
 
-numWeeks = listArray (minBound, maxBound) [16, 24, 28, 30, 32, 34, 37, 38, 39, 46]
-
-availableDays :: [DayOfWeek]
-availableDays = [Tuesday, Friday]
+oneYearOfCohorts = [Cohort 2026 09, Cohort 2026 10, Cohort 2026 11, Cohort 2026 12, Cohort 2027 01, Cohort 2027 02, Cohort 2027 03, Cohort 2027 04, Cohort 2027 05, Cohort 2027 06, Cohort 2027 07, Cohort 2027 08]
 
 othermain = do
-  result <- schedule [Cohort 2026 09]
+  result <- schedule oneYearOfCohorts
   print result
 
--- {-
 main = do
-  let cohorts = [Cohort 2026 09, Cohort 2026 10, Cohort 2026 11, Cohort 2026 12, Cohort 2027 01, Cohort 2027 02, Cohort 2027 03, Cohort 2027 04, Cohort 2027 05, Cohort 2027 06, Cohort 2027 07, Cohort 2027 08]
+  let cohorts = oneYearOfCohorts
   res <- schedule cohorts
   case res of
     SatResult (Satisfiable _ _) -> do
@@ -33,7 +28,6 @@ main = do
         forM_ (zip names days) print
     _ ->
       putStrLn "No solution"
--- -}
 
 schedule cohorts = sat $ do
   allDays <- mapM buildCohortEvents cohorts
@@ -91,11 +85,8 @@ isAvailableWeekDay d =
  .|| d `sMod` 7 .== 6   -- Tuesday
  .|| d `sMod` 7 .== 5   -- Monday
 
-addWeeks :: Integer -> Day -> Day
-addWeeks n d = addDays (n * 7) d
-
 dueDateTolastMenstrualPeriod :: Day -> Day
-dueDateTolastMenstrualPeriod = addWeeks (-40)
+dueDateTolastMenstrualPeriod = addDays (-40 * 7)
 
 cohortDueDate :: Cohort -> Day
 cohortDueDate (Cohort year month) = YearMonthDay year month 15
@@ -104,12 +95,6 @@ targetDay :: Cohort -> Visit -> Day
 targetDay cohort visit =
     addDays (7 * numWeeks!visit)
             (dueDateTolastMenstrualPeriod (cohortDueDate cohort))
+  where numWeeks =
+          listArray (minBound, maxBound) [16, 24, 28, 30, 32, 34, 37, 38, 39, 46]
 
-closestDay :: DayOfWeek -> Day -> Day
-closestDay target day =
-  let currentDow = fromEnum (dayOfWeek day)
-      targetDow = fromEnum target
-      forward  = (targetDow - currentDow) `mod` 7
-      backward = forward - 7
-      bestDirection = if abs backward <= abs forward then backward else forward
-  in addDays (fromIntegral bestDirection) day
